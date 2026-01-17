@@ -1,16 +1,30 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import {SendHorizontal,Square,Paperclip} from "lucide-react"
 
-export default function Chat() {
+const send= <SendHorizontal className="text-xl " color={"white"} fill={"white"}/>
+const loadingChat =<Square className="text-xl " color={"white"} fill={"white"}/>
+
+interface Block {
+  id: string;
+  type: 'paragraph';
+  content: string;
+}
+
+interface ChatSectionProps {
+  setDocumentBlocks: React.Dispatch<React.SetStateAction<Block[]>>;
+}
+
+export default function Chat({ setDocumentBlocks }: ChatSectionProps) {
+  const [file, setFile] = useState<File | null>(null);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<
-    { role: "user" | "assistant"; content: string }[]
+      { role: "user" | "assistant"; content: string }[]
   >([]);
   const [loading, setLoading] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-
 
   useEffect(() => {
     // Auto scroll to bottom when messages change
@@ -29,17 +43,63 @@ export default function Chat() {
       role: "user",
       content: input.trim(),
     };
+    const systemInstruction = {
+      role: "system",
+      content: "Explain concepts step by step like a teacher.  Rules:\n" +
+          "- Use paragraphs for normal explanatory text.\n" +
+          "- Use h1 only for main titles or primary sections.\n" +
+          "- Use h2 for subsections.\n" +
+          "- Use h3 for minor sections or breakdowns.\n" +
+          "- Use strong only for key terms or short emphasis (never entire sentences).\n" +
+          "- Use emphasis sparingly for tone or nuance.\n" +
+          "- Use unordered or ordered lists for grouped or sequential information.\n" +
+          "- Use blockquotes only for callouts, notes, or important observations.\n" +
+          "- Use inline code for short technical references, variables, or commands.\n" +
+          "- Use code blocks only for executable or structured code.\n" +
+          "- Use links only when they add clear value.\n" +
+          "\n" +
+          "Constraints:\n" +
+          "- Do not invent new formatting types.\n" +
+          "- Do not nest headings incorrectly.\n" +
+          "- Do not overuse emphasis or strong text.\n" +
+          "- Keep paragraphs concise and readable.\n" +
+          "- Prefer clarity and hierarchy over decoration.\n"+
+          "CRITICAL FORMATTING RULE:\n"+
+          "- Tables are forbidden.\n"+
+          "- Never use markdown tables or any tabular layout.\n"+
+          "- If information would normally be presented as a table, rewrite it using headings, lists, or paragraphs instead."
+
+
+  };
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setLoading(true);
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: [...messages, userMessage] }),
-      });
+      let res: Response;
+
+      if (file) {
+        // Send with file using FormData
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("messages", JSON.stringify([...messages, userMessage]));
+
+        res = await fetch("/api/chat", {
+          method: "POST",
+          body: formData,
+        });
+
+        // Clear file after sending
+        setFile(null);
+      } else {
+        // Send without file using JSON
+        res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: [systemInstruction,...messages, userMessage] }),
+        });
+      }
 
       if (!res.ok || !res.body) {
         throw new Error(`HTTP error! status: ${res.status}`);
@@ -50,38 +110,26 @@ export default function Chat() {
 
       let assistantText = "";
 
-      // Append a placeholder assistant message
-      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-
-      // Read the stream
+// Read the stream (but don't show in chat)
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
         assistantText += decoder.decode(value, { stream: true });
-        setMessages((prev) => {
-          const updated = [...prev];
-          if (updated.length > 0) {
-            updated[updated.length - 1] = {
-              ...updated[updated.length - 1],
-              content: assistantText,
-            };
-          }
-          return updated;
-        });
       }
 
-      // Flush any remaining decoder buffer
+// Flush any remaining decoder buffer
       assistantText += new TextDecoder().decode();
-      setMessages((prev) => {
-        const updated = [...prev];
-        if (updated.length > 0) {
-          updated[updated.length - 1] = {
-            ...updated[updated.length - 1],
-            content: assistantText,
-          };
-        }
-        return updated;
-      });
+
+// Add assistant response ONLY to document (not chat)
+      const paragraphs = assistantText.split('\n\n').filter((p: string) => p.trim());
+      const newBlocks = paragraphs.map((p: string, i: number) => ({
+        id: `block-${Date.now()}-${i}`,
+        type: 'paragraph' as const,
+        content: p.trim()
+      }));
+
+      setDocumentBlocks(prev => [...prev, ...newBlocks]);
+
     } catch (err) {
       console.error(err);
       setMessages((prev) => [
@@ -101,63 +149,86 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-screen bg-neutral-900 text-neutral-100 scr">
-      {/* Messages */}
-      <div
-        ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-4 md:px-6 py-6 space-y-4 scr"
-      >
-        {messages.length === 0 && (
-          <div className="text-sm text-neutral-400">Start the conversation…</div>
-        )}
-        {messages.map((m, i) => {
-          const isUser = m.role === "user";
-          return (
-            <div key={i} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-              <div
-                className={`max-w-[75%] whitespace-pre-wrap rounded-2xl px-4 py-2 text-sm md:text-base shadow-sm border ${
-                  isUser
-                    ? "bg-blue-600 text-white border-blue-500"
-                    : "bg-neutral-800 text-neutral-100 border-neutral-700"
-                }`}
-              >
-                <ReactMarkdown>
-                  {m.content}
-                </ReactMarkdown>
-              </div>
-            </div>
-          );
-        })}
-        <div ref={endRef} />
-      </div>
+      <div className="flex-1 flex flex-col h-screen bg-neutral-900 text-neutral-100 scrollbar-hide border-r-2 rounded-2xl">
+        {/* Messages */}
+        <div
+            ref={scrollContainerRef}
+            className="flex-1 overflow-y-auto px-4 md:px-6 py-6 space-y-4 scr ml-30 mr-30"
+        >
+          {messages.length === 0 && (
+              <div className="text-sm text-neutral-400">Start the conversation…</div>
+          )}
+          {messages.map((m, i) => {
+            const isUser = m.role === "user";
+            return (
+                <div key={i} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+                  <div
+                      className={`max-w-[75%] whitespace-pre-wrap rounded-2xl px-4 py-2 text-sm md:text-base shadow-sm border ${
+                          isUser
+                              ? "bg-neutral-800 text-white border-neutral-700"
+                              : "bg-transparent text-neutral-100 border-0"
+                      }`}
+                  >
+                    <ReactMarkdown>
+                      {m.content}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+            );
+          })}
+          <div ref={endRef} />
+        </div>
 
-      {/* Input */}
-      <div className="border-t border-neutral-800 p-3 md:p-4">
-        <div className="flex items-end gap-2">
-          <textarea
+        <div className="bg-neutral-800 rounded-xl p-3 m-4 mb-8 md:p-4 flex flex-col">
+        <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
-            placeholder="Type a message (Shift+Enter for newline)"
-            className="flex-1 resize-none rounded-xl bg-neutral-800 text-neutral-100 placeholder:text-neutral-400 border border-neutral-700 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600/50"
-          />
-          <button
-            onClick={handleSend}
-            disabled={loading || !input.trim()}
-            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
-              loading || !input.trim()
-                ? "bg-neutral-700 text-neutral-400 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-500 text-white"
-            }`}
-          >
-            {loading ? "Sending…" : "Send"}
-          </button>
+            placeholder="Ask Notovo"
+            className="w-full resize-none bg-transparent text-neutral-100 placeholder:text-neutral-400 focus:outline-none mb-3"
+        />
+
+          <div className="flex items-center justify-between">
+            {/* Paperclip Button */}
+            <div className="flex items-center">
+              <input
+                  id="file-upload"
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  className="hidden"
+              />
+
+              <label
+                  htmlFor="file-upload"
+                  className="cursor-pointer text-neutral-400 hover:text-neutral-200 transition-colors p-1"
+              >
+                <Paperclip />
+              </label>
+
+              {/* Show file name if selected */}
+              {file && (
+                  <span className="ml-2 text-sm text-blue-500">
+                  {file.name}
+                </span>
+              )}
+            </div>
+
+            {/* Send Button */}
+            <button
+                onClick={handleSend}
+                disabled={loading || !input.trim()}
+                className={`px-4 py-2 text-sm font-medium transition-colors rounded-full ${
+                    loading
+                        ? " bg-blue-600 text-white rounded-4xl opacity-20"
+                        : " text-neutral-400 cursor-not-allowed rounded-4xl"
+                }`}
+            >
+              {loading?loadingChat:send}
+            </button>
+          </div>
         </div>
-        <p className="mt-2 text-[11px] text-neutral-500">
-          Press Enter to send, Shift+Enter for a new line
-        </p>
       </div>
-    </div>
   );
 }

@@ -10,7 +10,8 @@ import {
 import { cn } from "@/lib/utils";
 import {TextAlignJustify} from "lucide-react"
 import Image from "next/image";
-import Chat from "@/components/ChatSection";
+import SplitScreen from "@/components/SplitScreen";
+
 
 export function SidebarDemo() {
     const links = [
@@ -80,7 +81,7 @@ export function SidebarDemo() {
                     </div>
                 </SidebarBody>
             </Sidebar>
-            <Chat />
+            <SplitScreen/>
         </div>
     );
 }

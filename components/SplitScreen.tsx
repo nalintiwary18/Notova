@@ -1,24 +1,34 @@
 'use client'
 
 import 'react-split-pane/styles.css';
+import {useState} from "react";
 import {SplitPane, Pane} from "react-split-pane";
+import DocRender from "@/components/DocRender";
+import Chat from "@/components/ChatSection"
 
 
+export interface Block {
+    id: string;
+    type: 'paragraph';
+    content: string;
+}
 
-
-export default function Home() {
+export default function SplitScreen() {
+    const [documentBlocks, setDocumentBlocks] = useState<Block[]>([]);
     return (
-        <SplitPane direction="horizontal">
-        <Pane minSize="30%" defaultSize="40%">
-    <div className="h-[100vh] overflow-auto bg-gray-800">
-    <h1>hello</h1>
-    </div>
-    </Pane>
-    <Pane>
-    <div className="h-[100vh] overflow-auto bg-gray-900">
-        <h1>hellp</h1>
+        <div className="h-screen w-screen overflow-hidden">
+            <SplitPane direction="horizontal" className="!h-full">
+                <Pane minSize="30%" defaultSize="40%" >
+                    <div className="h-full overflow-y-auto scrollbar-hide bg-gray-800 right-2">
+                        <Chat setDocumentBlocks={setDocumentBlocks} />
+                    </div>
+                </Pane>
+                <Pane>
+                    <div className="h-full overflow-y-auto scrollbar-hide bg-gray-800 ">
+                        <DocRender documentBlocks={documentBlocks} setDocumentBlocks={setDocumentBlocks} />
+                    </div>
+                </Pane>
+            </SplitPane>
         </div>
-        </Pane>
-        </SplitPane>
-);
+    );
 }
