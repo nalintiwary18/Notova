@@ -215,11 +215,11 @@ export default function DocRender({ documentBlocks, setDocumentBlocks, onSelecti
           
             @page { 
               size: A4; 
-              margin: 0;
+              margin: 0 !important;
             }
             * {
-              margin: 0;
-              padding: 0;
+              margin: 0 !important;
+              padding: 0 !important;
             }
             body {
              
