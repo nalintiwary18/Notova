@@ -1,7 +1,7 @@
 // components/DocRender.tsx
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import ReactMarkdown from "react-markdown";
 import remarkMath from 'remark-math';
@@ -9,6 +9,8 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import remarkGfm from 'remark-gfm';
 import { SelectionData } from '@/hooks/useUIState';
+import { useAuth } from '@/hooks/AuthContext';
+import LoginPromptModal from '@/components/LoginPromptModal';
 
 
 interface Block {
@@ -26,6 +28,8 @@ interface DocRenderProps {
 
 export default function DocRender({ documentBlocks, setDocumentBlocks, onSelectionChange }: DocRenderProps) {
     const documentRef = useRef<HTMLDivElement>(null);
+    const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+    const { isAuthenticated } = useAuth();
 
     // Handle text selection - only detect and emit, no UI
     const handleMouseUp = () => {
@@ -198,6 +202,12 @@ export default function DocRender({ documentBlocks, setDocumentBlocks, onSelecti
 
     // Export to PDF matching the preview
     const exportToPDF = async () => {
+        // Gate PDF download behind authentication
+        if (!isAuthenticated) {
+            setShowLoginPrompt(true);
+            return;
+        }
+
         const printWindow = window.open('', '', 'width=800,height=600');
         if (printWindow) {
             // Get the rendered HTML from the document
@@ -229,7 +239,7 @@ export default function DocRender({ documentBlocks, setDocumentBlocks, onSelecti
               line-height: 1.8;
               background-color: #030712 !important;
               color: #D8A1A1;
-              margin: 0 auto;
+              margin: 2cm auto;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
@@ -586,6 +596,13 @@ export default function DocRender({ documentBlocks, setDocumentBlocks, onSelecti
                     </div>
                 </div>
             </div>
+
+            {/* Login Prompt Modal */}
+            <LoginPromptModal
+                isOpen={showLoginPrompt}
+                onClose={() => setShowLoginPrompt(false)}
+                feature="PDF download"
+            />
         </div>
     );
 }

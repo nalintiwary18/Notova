@@ -50,10 +50,14 @@ export function clearSession(): void {
 
 // ============ CHAT SESSION FUNCTIONS ============
 
-export async function createChatSession(sessionId: string): Promise<ChatSession | null> {
+export async function createChatSession(sessionId: string, userId?: string, title?: string): Promise<ChatSession | null> {
+    const insertData: { id: string; user_id?: string; title?: string } = { id: sessionId }
+    if (userId) insertData.user_id = userId
+    if (title) insertData.title = title
+
     const { data, error } = await supabase
         .from('chat_sessions')
-        .insert({ id: sessionId })
+        .insert(insertData)
         .select()
         .single()
 
@@ -64,7 +68,7 @@ export async function createChatSession(sessionId: string): Promise<ChatSession 
     return data
 }
 
-export async function getOrCreateChatSession(sessionId: string): Promise<ChatSession | null> {
+export async function getOrCreateChatSession(sessionId: string, userId?: string): Promise<ChatSession | null> {
     // Try to get existing session
     const { data: existing } = await supabase
         .from('chat_sessions')
@@ -77,7 +81,33 @@ export async function getOrCreateChatSession(sessionId: string): Promise<ChatSes
     }
 
     // Create new session
-    return createChatSession(sessionId)
+    return createChatSession(sessionId, userId)
+}
+
+export async function getUserChatSessions(userId: string): Promise<ChatSession[]> {
+    const { data, error } = await supabase
+        .from('chat_sessions')
+        .select()
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+        .limit(20)
+
+    if (error) {
+        handleStorageError('getting user chat sessions', error)
+        return []
+    }
+    return data || []
+}
+
+export async function updateChatSessionTitle(sessionId: string, title: string): Promise<void> {
+    const { error } = await supabase
+        .from('chat_sessions')
+        .update({ title, updated_at: new Date().toISOString() })
+        .eq('id', sessionId)
+
+    if (error) {
+        handleStorageError('updating chat session title', error)
+    }
 }
 
 // ============ CHAT MESSAGE FUNCTIONS ============

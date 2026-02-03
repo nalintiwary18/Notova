@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from "framer-motion"
 import { useUIState } from "@/hooks/useUIState"
 import { useChatStorage } from "@/hooks/useChatStorage"
 import { UserDocument } from "@/lib/supabase"
+import { useAuth } from "@/hooks/AuthContext"
+import LoginPromptModal from "@/components/LoginPromptModal"
 
 interface Block {
   id: string
@@ -29,9 +31,14 @@ export default function Chat({ setDocumentBlocks, documentBlocks, onSaveUploaded
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState('')
   const [isDragging, setIsDragging] = useState(false)
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false)
+  const [pendingFeature, setPendingFeature] = useState<string>('')
   const endRef = useRef<HTMLDivElement | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Auth state
+  const { isAuthenticated } = useAuth()
 
   // Use chat storage hook for message persistence
   const {
@@ -106,6 +113,13 @@ export default function Chat({ setDocumentBlocks, documentBlocks, onSaveUploaded
 
   const handleAIEdit = async () => {
     if (!input.trim() || !selection?.selectedText) return;
+
+    // Gate AI editing behind authentication
+    if (!isAuthenticated) {
+      setPendingFeature('AI document editing');
+      setShowLoginPrompt(true);
+      return;
+    }
 
     // Capture selection before async operation to prevent stale closure
     const currentSelection = selection;
@@ -613,6 +627,13 @@ export default function Chat({ setDocumentBlocks, documentBlocks, onSaveUploaded
           </div>
         </div>
       </div>
+
+      {/* Login Prompt Modal */}
+      <LoginPromptModal
+        isOpen={showLoginPrompt}
+        onClose={() => setShowLoginPrompt(false)}
+        feature={pendingFeature}
+      />
     </div>
   )
 }

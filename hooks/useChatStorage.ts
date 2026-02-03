@@ -6,9 +6,11 @@ import {
     getOrCreateChatSession,
     saveChatMessage,
     getChatHistory,
-    cleanupExpiredUserDocuments
+    cleanupExpiredUserDocuments,
+    updateChatSessionTitle
 } from '@/lib/storage'
 import { ChatMessage } from '@/lib/supabase'
+import { useAuth } from '@/hooks/AuthContext'
 
 export interface Message {
     role: 'user' | 'assistant' | 'system'
@@ -22,6 +24,8 @@ export function useChatStorage() {
     const [isLoading, setIsLoading] = useState(true)
     const [isInitialized, setIsInitialized] = useState(false)
     const initRef = useRef(false)
+    const titleUpdatedRef = useRef(false)
+    const { user, isAuthenticated } = useAuth()
 
     // Initialize session and load chat history
     useEffect(() => {
@@ -33,8 +37,8 @@ export function useChatStorage() {
                 const sid = getOrCreateSessionId()
                 setSessionId(sid)
 
-                // Ensure session exists in database
-                await getOrCreateChatSession(sid)
+                // Ensure session exists in database (with user ID if authenticated)
+                await getOrCreateChatSession(sid, user?.id)
 
                 // Load existing chat history
                 const history = await getChatHistory(sid)
@@ -63,16 +67,31 @@ export function useChatStorage() {
         }
 
         initSession()
-    }, [])
+    }, [user?.id])
+
+    // Auto-generate session title from first user message (for authenticated users only)
+    useEffect(() => {
+        if (!isAuthenticated || !sessionId || titleUpdatedRef.current) return
+
+        // Find first user message
+        const firstUserMessage = messages.find(m => m.role === 'user')
+        if (firstUserMessage) {
+            titleUpdatedRef.current = true
+            // Create title from first ~50 chars of message
+            const title = firstUserMessage.content.slice(0, 50) + (firstUserMessage.content.length > 50 ? '...' : '')
+            updateChatSessionTitle(sessionId, title)
+        }
+    }, [messages, sessionId, isAuthenticated])
 
     // Add a message (saves to database and updates local state)
+    // For anonymous users, only save to Supabase temporarily
     const addMessage = useCallback(async (message: Message) => {
         if (!sessionId) return
 
         // Update local state immediately
         setMessages(prev => [...prev, message])
 
-        // Save to database in background
+        // Save to database in background (for all users - anon sessions have TTL)
         try {
             await saveChatMessage(
                 sessionId,
@@ -129,6 +148,7 @@ export function useChatStorage() {
         replaceLastMessage,
         clearMessages,
         isLoading,
-        isInitialized
+        isInitialized,
+        isAuthenticated
     }
 }
