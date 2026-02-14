@@ -6,15 +6,28 @@ import {
     getOrCreateChatSession,
     saveChatMessage,
     getChatHistory,
-    cleanupExpiredUserDocuments
+    cleanupExpiredUserDocuments,
+    updateChatSessionTitle
 } from '@/lib/storage'
 import { ChatMessage } from '@/lib/supabase'
+import { useAuth } from '@/hooks/AuthContext'
 
 export interface Message {
     role: 'user' | 'assistant' | 'system'
     content: string
     showOpenDocument?: boolean
+    versionIndex?: number  // For tracking which version this message relates to
+    fileMetadata?: {  // For persistent file attachment preview
+        fileName: string
+        fileSize: number
+        fileType: string
+    }
+    editMetadata?: {  // For persistent edit with AI preview
+        selectedText: string
+        command: string
+    }
 }
+
 
 export function useChatStorage() {
     const [sessionId, setSessionId] = useState<string | null>(null)
@@ -22,6 +35,9 @@ export function useChatStorage() {
     const [isLoading, setIsLoading] = useState(true)
     const [isInitialized, setIsInitialized] = useState(false)
     const initRef = useRef(false)
+    const titleUpdatedRef = useRef(false)
+    const sessionCreatedRef = useRef(false) // Track if session exists in DB
+    const { user, isAuthenticated } = useAuth()
 
     // Initialize session and load chat history
     useEffect(() => {
@@ -33,17 +49,23 @@ export function useChatStorage() {
                 const sid = getOrCreateSessionId()
                 setSessionId(sid)
 
-                // Ensure session exists in database
-                await getOrCreateChatSession(sid)
-
-                // Load existing chat history
+                // DON'T create session in database here - wait until first message is sent
+                // Only load existing chat history if session exists
                 const history = await getChatHistory(sid)
+
+                // If we have history, the session already exists in DB
+                if (history.length > 0) {
+                    sessionCreatedRef.current = true
+                }
 
                 // Convert database messages to local format
                 const localMessages: Message[] = history.map((msg: ChatMessage) => ({
                     role: msg.role,
                     content: msg.content,
-                    showOpenDocument: msg.show_open_document
+                    showOpenDocument: msg.show_open_document,
+                    versionIndex: msg.version_index,
+                    fileMetadata: msg.file_metadata,  // Load file metadata from database
+                    editMetadata: msg.edit_metadata   // Load edit metadata from database
                 }))
 
                 setMessages(localMessages)
@@ -63,27 +85,51 @@ export function useChatStorage() {
         }
 
         initSession()
-    }, [])
+    }, [user?.id])
+
+    // Auto-generate session title from first user message (for authenticated users only)
+    useEffect(() => {
+        if (!isAuthenticated || !sessionId || titleUpdatedRef.current) return
+
+        // Find first user message
+        const firstUserMessage = messages.find(m => m.role === 'user')
+        if (firstUserMessage) {
+            titleUpdatedRef.current = true
+            // Create title from first ~50 chars of message
+            const title = firstUserMessage.content.slice(0, 50) + (firstUserMessage.content.length > 50 ? '...' : '')
+            updateChatSessionTitle(sessionId, title)
+        }
+    }, [messages, sessionId, isAuthenticated])
 
     // Add a message (saves to database and updates local state)
+    // For anonymous users, only save to Supabase temporarily
     const addMessage = useCallback(async (message: Message) => {
         if (!sessionId) return
 
         // Update local state immediately
         setMessages(prev => [...prev, message])
 
-        // Save to database in background
+        // Save to database in background (for all users - anon sessions have TTL)
         try {
+            // Lazily create the session in DB only when the first message is sent
+            if (!sessionCreatedRef.current) {
+                await getOrCreateChatSession(sessionId, user?.id)
+                sessionCreatedRef.current = true
+            }
+
             await saveChatMessage(
                 sessionId,
                 message.role,
                 message.content,
-                message.showOpenDocument || false
+                message.showOpenDocument || false,
+                message.versionIndex,
+                message.fileMetadata,
+                message.editMetadata
             )
         } catch (error) {
             console.error('Error saving message:', error)
         }
-    }, [sessionId])
+    }, [sessionId, user?.id])
 
     // Add messages without saving (for local-only updates)
     const addLocalMessage = useCallback((message: Message) => {
@@ -99,7 +145,8 @@ export function useChatStorage() {
                 sessionId,
                 message.role,
                 message.content,
-                message.showOpenDocument || false
+                message.showOpenDocument || false,
+                message.versionIndex  // Pass versionIndex to persist
             )
         } catch (error) {
             console.error('Error saving message:', error)
@@ -129,6 +176,7 @@ export function useChatStorage() {
         replaceLastMessage,
         clearMessages,
         isLoading,
-        isInitialized
+        isInitialized,
+        isAuthenticated
     }
 }
