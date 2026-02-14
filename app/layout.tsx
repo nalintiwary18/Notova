@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const gochiHand = Gochi_Hand({
-  variable: "--font-gochi-hand",
+const pangolin = Pangolin({
+  variable: "--font-pangolin",
   weight: "400",
   subsets: ["latin"],
   display: "swap",
@@ -37,13 +37,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${gochiHand.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${pangolin.variable} antialiased`}
       >
         <AuthProvider>
           {children}
         </AuthProvider>
         <Analytics />
-      <SpeedInsights />
+        <SpeedInsights />
       </body>
     </html>
   );
