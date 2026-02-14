@@ -62,9 +62,20 @@ export default function UserMenu({ collapsed = false }: UserMenuProps) {
         return (
             <button
                 onClick={handleLogin}
-                className="flex items-center gap-2 p-2.5  rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 transition-all duration-200 text-white text-sm font-medium"
+                className="flex items-center gap-2 py-2 hover:bg-neutral-700/50 rounded-lg transition-colors w-full"
             >
-                <User className="h-4 w-4" />
+                <div className="p-4 rounded-full bg-gray-900 flex items-center justify-center text-white text-sm font-semibold">
+                    <User className="h-4 w-4 absolute" />
+                </div>
+                {!collapsed && (
+                    <motion.span
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="text-neutral-200 text-sm"
+                    >
+                        Login
+                    </motion.span>
+                )}
             </button>
         )
     }
