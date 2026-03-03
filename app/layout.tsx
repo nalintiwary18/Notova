@@ -7,6 +7,13 @@ import { AuthProvider } from "@/hooks/AuthContext";
 import React from "react";
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import { Analytics } from "@vercel/analytics/next";
+<script
+   async
+   defer
+   src="https://www.faurya.com/js/script.js"
+   data-domain="notovo.in"
+   data-website-id="cmmap2t4k0002l404c23aooj7">
+</script>
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
